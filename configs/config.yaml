@@ -1,0 +1,228 @@
+# TC-DrugRAG Configuration
+# Main configuration file for the Temporal Causal RAG Drug Discovery Framework
+
+project:
+  name: "TC-DrugRAG"
+  version: "0.1.0"
+  description: "Temporal Causal RAG for Hypothesis-Driven Drug Discovery"
+
+# Data Sources Configuration
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  external_dir: "data/external"
+
+  sources:
+    drugbank:
+      url: "https://go.drugbank.com/releases/latest"
+      local_path: "data/external/drugbank"
+      update_frequency: "monthly"
+
+    disgenet:
+      url: "https://www.disgenet.org/downloads"
+      local_path: "data/external/disgenet"
+      version: "v7.0"
+
+    string:
+      url: "https://string-db.org/cgi/download"
+      local_path: "data/external/string"
+      species: 9606  # Human
+
+    pubmed:
+      api_key: ${PUBMED_API_KEY}
+      max_results_per_query: 10000
+      cache_dir: "data/cache/pubmed"
+
+    clinicaltrials:
+      api_base: "https://clinicaltrials.gov/api/v2"
+      cache_dir: "data/cache/clinicaltrials"
+
+    pharmgkb:
+      url: "https://api.pharmgkb.org"
+      local_path: "data/external/pharmgkb"
+
+# Knowledge Graph Configuration
+knowledge_graph:
+  backend: "neo4j"  # Options: neo4j, networkx, rdflib
+
+  neo4j:
+    uri: ${NEO4J_URI:bolt://localhost:7687}
+    user: ${NEO4J_USER:neo4j}
+    password: ${NEO4J_PASSWORD}
+    database: "tcdrugrag"
+
+  schema:
+    node_types:
+      - "Drug"
+      - "Gene"
+      - "Protein"
+      - "Disease"
+      - "Pathway"
+      - "ClinicalTrial"
+      - "Publication"
+      - "SideEffect"
+      - "Variant"
+
+    edge_types:
+      direct_causal:
+        - "ACTIVATES"
+        - "INHIBITS"
+        - "PHOSPHORYLATES"
+        - "BINDS_TO"
+      indirect_causal:
+        - "UPREGULATES"
+        - "DOWNREGULATES"
+        - "MODULATES"
+      temporal_causal:
+        - "PRECEDES"
+        - "LEADS_TO"
+        - "PREVENTS"
+        - "DELAYS"
+      associative:
+        - "ASSOCIATED_WITH"
+        - "MENTIONED_IN"
+        - "TESTED_IN"
+
+  temporal:
+    enable_temporal_edges: true
+    default_validity_window_years: 10
+    temporal_decay_lambda: 0.1
+
+# Causal Retrieval Configuration
+retrieval:
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  biomedical_embedding: "pritamdeka/S-PubMedBert-MS-MARCO"
+
+  vector_store:
+    backend: "faiss"  # Options: faiss, chromadb, pinecone
+    index_type: "IVF_FLAT"
+    nlist: 100
+    nprobe: 10
+
+  causal_retrieval:
+    max_path_depth: 4
+    min_edge_confidence: 0.3
+    temporal_filtering: true
+    counterfactual_reasoning: true
+
+  ranking:
+    evidence_weight: 0.35
+    causal_depth_weight: 0.25
+    temporal_consistency_weight: 0.20
+    source_diversity_weight: 0.20
+
+# Hypothesis Generation Configuration
+hypothesis:
+  llm:
+    provider: "openai"  # Options: openai, anthropic, local
+    model: "gpt-4-turbo-preview"
+    temperature: 0.7
+    max_tokens: 2048
+
+  anthropic:
+    model: "claude-3-opus-20240229"
+
+  generation:
+    num_hypotheses_per_query: 10
+    min_confidence_threshold: 0.3
+    require_causal_chain: true
+    max_causal_chain_length: 5
+
+  structured_output:
+    drug_field: true
+    target_field: true
+    disease_field: true
+    mechanism_field: true
+    evidence_summary: true
+    suggested_experiments: true
+
+# Uncertainty Quantification Configuration
+uncertainty:
+  method: "ensemble"  # Options: ensemble, mc_dropout, conformal
+
+  ensemble:
+    n_models: 5
+    aggregation: "mean_std"
+
+  calibration:
+    method: "temperature_scaling"
+    validation_split: 0.2
+
+  confidence_interval:
+    level: 0.95
+    bootstrap_samples: 1000
+
+# Validation Configuration
+validation:
+  in_silico:
+    docking:
+      tool: "autodock_gpu"
+      exhaustiveness: 32
+      num_poses: 10
+
+    admet:
+      tool: "admetlab2"
+      properties:
+        - "absorption"
+        - "distribution"
+        - "metabolism"
+        - "excretion"
+        - "toxicity"
+
+    pathway_enrichment:
+      tool: "enrichr"
+      libraries:
+        - "KEGG_2021_Human"
+        - "Reactome_2022"
+        - "GO_Biological_Process_2023"
+
+  feedback_loop:
+    enable: true
+    bayesian_update: true
+    prior_weight: 0.3
+    kg_update_threshold: 0.7
+
+# Experiment Configuration
+experiment:
+  seed: 42
+  device: "cuda"  # Options: cuda, cpu, mps
+
+  logging:
+    level: "INFO"
+    wandb_project: "tc-drugrag"
+    mlflow_tracking_uri: "mlruns"
+
+  checkpoints:
+    save_dir: "checkpoints"
+    save_frequency: 1000
+    keep_last_n: 5
+
+# Evaluation Configuration
+evaluation:
+  metrics:
+    - "precision_at_k"
+    - "recall_at_k"
+    - "ndcg"
+    - "novelty_score"
+    - "mechanism_accuracy"
+    - "calibration_error"
+    - "coverage_95ci"
+    - "brier_score"
+
+  baselines:
+    - "standard_rag"
+    - "causal_rag_wang2025"
+    - "drugagent"
+    - "kg_embedding_transe"
+    - "gpt4_zeroshot"
+
+  datasets:
+    ttd:
+      path: "data/external/ttd"
+      task: "drug_target_prediction"
+    drugcentral:
+      path: "data/external/drugcentral"
+      task: "drug_repurposing"
+    clinicaltrials_retrospective:
+      path: "data/processed/ct_retrospective"
+      task: "temporal_validation"
